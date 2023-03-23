@@ -6,6 +6,7 @@ library(pbapply)
 library(dplyr)
 library(progress)
 
+
 scQuant = function(geneMat = geneMat, celltype = celltype, 
                    zeroPerc = zeroPerc, 
                    OutlierRemoval = TRUE,
