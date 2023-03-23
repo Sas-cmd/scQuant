@@ -2,30 +2,31 @@ Package: scQuant
 Type: Package
 Title: scQuant - A novel method to categorize heterogeneity of gene expression using quantile normalised median absolute deviation
 Version: 1.0.3
-Authors@R: 
-    c(
+Authors@R: c(
     person(given = "Sasdekumar",
            family = "Loganathan",
            role = c("aut", "cre"),
-           email = "sas/glogan@gmail.com@gmail.com")
-    )
+           email = "sas/glogan@gmail.com@gmail.com"))
+Maintainer: Sasdekumar Loganathan <sas.glogan@gmail.com>
 Description: To develop an R method to quantify variance
-License: What license is it under?
+License: MIT + file LICENSE
 Encoding: UTF-8
-LazyData: true
+LazyData: FALSE
 RoxygenNote: 7.2.3
+Depends: R (>= 4.1)
 Imports: 
     data.table,
     Hmisc,
     Seurat,
     pbapply,
     dplyr,
+    philentropy,
+    purrr,
     SingleCellExperiment,
     SummarizedExperiment,
     ggplot2,
     rlang,
     grDevices,
-    patchwork,
     reshape2,
     BiocParallel,
     stats,

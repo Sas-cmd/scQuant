@@ -15,10 +15,10 @@
 #' @import pbapply
 #' @import dplyr
 #' @import progress
-#' @return
+#' @return with std returns the quantile NMAD values
 #' @export
 #'
-#' @examples
+
 scQuant = function(geneMat = geneMat, celltype = celltype, 
                    zeroPerc = zeroPerc, 
                    OutlierRemoval = TRUE,
