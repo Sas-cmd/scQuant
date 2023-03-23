@@ -9,7 +9,6 @@ Authors@R:
            role = c("aut", "cre"),
            email = "sas/glogan@gmail.com@gmail.com")
     )
-Maintainer: sas.glogan@gmail.com
 Description: To develop an R method to quantify variance
 License: What license is it under?
 Encoding: UTF-8
@@ -31,3 +30,13 @@ Imports:
     BiocParallel,
     stats,
     progress
+Suggests: 
+    rmarkdown,
+    knitr,
+    BiocStyle,
+    testthat,
+    UpSetR,
+    scater,
+    fgsea,
+    pheatmap,
+    patchwork
