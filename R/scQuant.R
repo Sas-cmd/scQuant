@@ -1,11 +1,3 @@
-#Final functions for scQuant
-library(data.table)
-library(Hmisc)
-library(Seurat)
-library(pbapply)
-library(dplyr)
-library(progress)
-
 
 #' @title Computing quantile normalised MAD
 #'
@@ -16,7 +8,13 @@ library(progress)
 #' Default set to TRUE
 #' @param QuantNo Total number of quantiles the gene expression distribution is to be spli into
 #' @param method Different analysis building upon the quantile methodology. "std", returns the quantile NMAD values for each gene, for each cell type and a list of data frames. "SG" calculates genes with and ranks genes with based on how stable the gene expressions are, genes are ranked from most to least stable, where there higher the ranking the more stable the genes are. "DS" calculates genes that are differentially stably expressed between cell types, using two-sample Wilcoxon test. "NoPval", calculates differentially stable genes by comparing the ranking between genes expression from different cell types."SV" calculate and returns a ranking of genes that are stably variable either between cell types or between datasets
-#'
+#' @import data.table
+#' @import Hmisc
+#' @import Seurat
+#' @import pbapply
+#' @import pbapply
+#' @import dplyr
+#' @import progress
 #' @return
 #' @export
 #'
