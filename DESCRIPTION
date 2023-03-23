@@ -4,8 +4,7 @@ Title: scQuant - A novel method to categorize heterogeneity of gene expression u
 Version: 0.1.0
 Author: Sasdekumar Loganathan
 Maintainer: sas.glogan@gmail.com
-Description: 
-    Use four spaces when indenting paragraphs within the Description.
+Description: To develop an R method to quantify variance
 License: What license is it under?
 Encoding: UTF-8
 LazyData: true
