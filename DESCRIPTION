@@ -13,7 +13,13 @@ License: mit
 Encoding: UTF-8
 LazyData: false
 RoxygenNote: 7.2.3
-Depends: R (>= 4.1), pbapply, dplyr, purrr, stats, progress
+Depends: 
+    R (>= 4.1.0), 
+    pbapply (>= 1.7.0), 
+    dplyr (>= 1.1.1), 
+    purrr (>= 1.0.1),
+    stats (>= 4.2.2), 
+    progress (>= 1.2.2),
 Imports: 
     data.table,
     Hmisc,
