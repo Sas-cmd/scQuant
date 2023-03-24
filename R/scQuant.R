@@ -13,22 +13,16 @@
 #' "DS" calculates genes that are differentially stably expressed between cell types, using two-sample Wilcoxon test.
 #' "NoPval", calculates differentially stable genes by comparing the ranking between genes expression from different cell types.
 #' "SV" calculate and returns a ranking of genes that are stably variable either between cell types or between datasets
+#' @return with std returns the quantile NMAD values
+#'
 #' @import data.table
 #' @import Hmisc
 #' @import Seurat
 #' @import pbapply
 #' @import dplyr
 #' @import progress
-#' @importFrom stats
-#' @importFrom complete.cases
-#' @importFrom mad
-#' @importFrom median
-#' @importFrom p.adjust
-#' @importFrom quantile
-#' @importFrom wilcox.test
-#' @importFrom utils
-#' @importFrom combn
-#' @return with std returns the quantile NMAD values
+#'
+#'
 
 scQuant = function(geneMat = geneMat, celltype = celltype,
                    zeroPerc = zeroPerc,
