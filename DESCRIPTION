@@ -33,9 +33,7 @@ Imports:
 Suggests: 
     rmarkdown,
     knitr,
-    BiocStyle,
     testthat,
-    UpSetR,
     scater,
     fgsea,
     pheatmap,
