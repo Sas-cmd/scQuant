@@ -8,6 +8,11 @@ Quantifying and comparing heterogeneity within and between scRNA-seq datasets re
  
 
 ## Installation
-Please install the development version of scQuant from github using the remotes package 
+Please install the development version of scQuant from github using the `remotes` package: 
+
+``` r
+# install.packages("remotes")
+remotes::install_github("Sas-cmd/scQuant")
+```
 
 
