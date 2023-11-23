@@ -1,0 +1,383 @@
+#Simulating datasets for testing scQuantDS
+
+library(data.table)
+library(MASS)
+library(pbapply)
+library(dplyr)
+library(progress)
+library(data.table)
+library(ggplot2)
+library(pROC)
+library(BiocParallel)
+
+setwd("P:/scQuant/heatmap/data/New_Sim/Final")
+#Functions####
+rbinFunc = function(n, mu1, sig1, min, max, flag) {
+    y0 = rnegbin(n, mu1, theta = mu1^2/(sig1^2 - mu1))
+    y1 = runif(n, min = min, max = max)
+    y = y0*(1 - flag) + y1*flag 
+}
+scQuant = function(geneMat = geneMat, celltype = celltype, 
+                   zeroPerc = zeroPerc, QuantNo =  QuantNo,
+                   method = c("SG", "SV", "DS", "std")){
+    
+    
+    message("Removing cell types that with fewer than 50 cells")
+    
+    CT = as.data.frame(table(celltype))
+    
+    CT = CT[CT$Freq >= 50 ,]
+    
+    celltype = as.character(celltype)
+    celltype = celltype[celltype %in% CT$celltype]
+    
+    message("Subsetting data by Cell Type")
+    geneMat_list = pblapply(names(table(celltype)), function(x) {
+        (geneMat[, celltype == x] )
+    })
+    
+    
+    names(geneMat_list) = names(table(celltype))
+    
+    message("removing genes excess zeros")
+    zeRM = pblapply(geneMat_list, function(x){
+        RMze = x[rowMeans(x == 0) < zeroPerc ,]})
+    
+    
+    
+    message("removing outliers")
+    OutRM = pblapply(zeRM, function(x){
+        apply(x, 1, function(w){
+            wt = RMOutlier(w)
+            wt = as.list(wt)
+            return(wt)})
+    })
+    
+    
+    OutRM.unlist = lapply(OutRM, lapply, unlist)
+    
+    message("Running scQuant")
+    SetOut = pblapply(OutRM.unlist, lapply, function(x){
+        dt = as.data.frame(table(x))
+        if(nrow(dt) == 1){
+            t24 = as.data.frame(t(c(0,0,0,0)))
+            colnames(t24) = c(seq(1:ncol(t24)))
+            return(t24)
+        }else{
+            t22 = split(x, cut(x, unique(quantile(x, (0:4/4),
+                                                  names = FALSE),
+                                         include = TRUE)))
+            t21 = as.data.frame(t(unlist(lapply(t22, NMAD))))
+            colnames(t21) = c(seq(1:ncol(t21)))
+            return(t21)
+        }
+    })
+    
+    Quant_out.tb = lapply(SetOut, function(x){
+        list_data = as.data.frame(data.table::rbindlist(x, fill = T))
+        list_data[is.na(list_data)] = 0
+        list_data$genes = names(x)
+        return(list_data)
+    })
+    
+    if (method == 'std') {
+        return(Quant_out.tb)
+    }
+    
+    if (method == "SG"){
+        SG = scSG (dat.list = Quant_out.tb, QuantNo = QuantNo)
+        return(SG)
+    }
+    if (method == "SV"){
+        SV = scSV(dat.list = Quant_out.tb, QuantNo = QuantNo)
+        return(SV)
+    }
+    if (method == "DS"){
+        DS = scDS(dat.list = Quant_out.tb)
+        return(DS)
+    }
+}  
+scDS = function(dat.list = dat.list){
+    SetUni = lapply(dat.list, function(unidat){
+        genenames = unidat$genes
+        unidat$genes = NULL
+        vars = combn(colnames(unidat), 2)
+        vars = cbind(vars, vars[2:1,])
+        done = sapply(seq_len(ncol(vars)),
+                      function(x) unidat[, vars[1, x]] / unidat[, vars[2, x]])
+        
+        done = abs(1 - done)
+        done[!is.finite(done)] = 0
+        done = as.data.frame(done)
+        
+        colnames(done) = paste(vars[1, ], vars[2, ], sep="/")
+        done$genes = genenames
+        return(done)
+    })
+    
+    
+    vars2 = combn(names(SetUni), 2)
+    
+    
+    pb = progress_bar$new(format = "(:spin) [:bar] :percent [Elapsed time: :elapsedfull || Estimated time remaining: :eta]",
+                          total = ncol(vars2),
+                          complete = "+",
+                          incomplete = "_",
+                          current = "+",
+                          clear = FALSE,
+                          width = 100)
+    
+    DSout = data.frame()
+    message("Performing DS")
+    for(i in 1:ncol(vars2)){
+        pb$tick()
+        t1 = SetUni[[vars2[1, i]]]
+        t2 = SetUni[[vars2[2, i]]]
+        t3 = merge(t1, t2, by = "genes", all.x = TRUE)
+        rownames(t3) = t3$genes
+        t3$genes = NULL
+        t3 = t3[complete.cases(t3), ]
+        t3_split = apply(t3, 1 , function(x){
+            t3_split = as.data.frame(split(x, ceiling(seq_along(x) / (ncol(t1)-1))))
+        })
+        
+        y3 = lapply(t3_split, function(w){
+            w1 = wilcox.test(w$X1, w$X2,
+                             paired = TRUE, exact = FALSE)$p.value
+        })
+        
+        y3 = t(as.data.frame(y3))
+        colnames(y3) = "p.value"
+        y3 = as.data.frame(y3)
+        y3[is.nan(y3$p.value),] <- 1
+        y3$celltype.1 = vars2[1,i]
+        y3$celltype.2 = vars2[2, i]
+        y3$genes = rownames(y3)
+        rownames(y3) = NULL
+        DSout = rbindlist(list(DSout, y3))
+        
+        
+    }
+    
+    DSout$p.adj = p.adjust(DSout$p.value, method = "BH")
+    DSout = DSout[complete.cases(DSout), ]
+    
+    return(DSout)
+}
+run.scQuant = function(datarow){
+    xw = scQuant(geneMat = datarow, 
+                 celltype = colnames(datarow), zeroPerc = 0.9, 
+                 QuantNo = 4, method = "std")
+    
+    t2 = ifelse(xw$p.value < 0.5, 1, 0)
+    
+    y = as.numeric(grepl('_DS_', xw$genes), ignore.case=T)
+    
+    au = auc(y, t2)
+    return(au)
+}
+#Simulation####
+ratio = c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
+zeo = c(0, 0.02, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5)
+
+for(i in 1:length(ratio)){
+    flag = rbinom(250, size = 1,  prob = ratio[i])
+    
+    t2 = as.data.frame(do.call(rbind, lapply(1:10000, function(x){
+        xt = t(data.frame( v1 = rnegbin(250, mu = 600, 
+                                        theta = 600^2/(320^2 - 600))
+        ))
+    })))
+    
+    rownames(t2) = paste0("gene", 1:nrow(t2))
+    colnames(t2) = rep("cellA", ncol(t2))
+    
+    for(j in 1:length(zeo)){
+        t0 = as.data.frame(t(apply(t2, 1, function(y) 
+            replace(y, sample(length(y), zeo[j]*length(y)), 0))))
+    
+    
+        t4 = t0
+    
+        t3 = as.data.frame(do.call(rbind, lapply(1:2000, function(x){
+        xt = t(data.frame(
+            v1 = rbinFunc(n = 250, mu1 = 600, sig1 = 320, 
+                          min = 5, max = 3000, flag  ))
+        )})))
+    
+        subsam = t3[sample(nrow(t3), 200), ]
+    
+        subsam1 = as.data.frame(t(apply(subsam, 1, function(y) 
+        replace(y, sample(length(y), zeo[j]*length(y)), 0))))
+    
+        rownames(t0)[9801:10000] = paste0("gene", "_DS_", 1:nrow(subsam1))
+    
+        t4[9801:10000,] = subsam1
+    
+        rownames(t4)[9801:10000] = paste0("gene", "_DS_", 1:nrow(subsam1))
+    
+        colnames(t4) = rep("cellB", ncol(t4))
+    
+        tttx = cbind(t0, t4)
+        
+        namenew = paste0(zeo[j]*100, "_", ratio[i]*100, "_", 
+                    "DS_Sim_ratio_zero", ".rds")
+        
+        saveRDS(tttx, namenew)
+        print(i)
+        print(namenew)
+    }  
+}
+
+#####Running scQuantDS####
+setwd("P:/scQuant/heatmap/data/New_Sim/Final")
+fnames = list.files()
+ls = lapply(fnames, readRDS)
+
+#Can't run with Biopara...... why?
+#Run on laptop in batches of 10, so won't crash.
+#TO DO: fix BioParallel
+
+
+ls1 = ls[1:10]
+
+run.scQuant = function(datarow){
+    xw = scQuant(geneMat = datarow, 
+                 celltype = colnames(datarow), zeroPerc = 0.9, 
+                 QuantNo = 4, method = "DS")
+    
+    t2 = ifelse(xw$p.value < 0.8, 1, 0)
+    
+    y = as.numeric(grepl('_DS_', xw$genes), ignore.case=T)
+    
+    au = auc(y, t2)
+    return(au)
+}
+
+scQuant.res = lapply(ls1, run.scQuant)
+
+names(scQuant.res) = fnames[1:10]
+plotheatMap(scQuant.res)
+
+ls2 = ls[1:40]
+
+scQuant.res1 = lapply(ls2, run.scQuant)
+names(scQuant.res1) = fnames[1:40]
+plotheatMap(scQuant.res1)
+
+ls1 = ls[41:50]
+
+scQuant.res2 = lapply(ls1, run.scQuant)
+names(scQuant.res2) = fnames[41:50]
+plotheatMap(scQuant.res2)
+
+ls1 = ls[21:100]
+scQuant.res2 = lapply(ls1, run.scQuant)
+
+ts = c(scQuant.res, scQuant.res1, scQuant.res2)
+
+names(ts) = fnames
+
+plotheatMap(ts)
+
+#####Running edgeR####
+run.edgeR = function(datarow){
+    
+    group = colnames(datarow)
+    dgelist=edgeR::DGEList(counts = datarow, group = group)
+    ### TMM method
+    dgelist_norm =try(
+        edgeR::calcNormFactors(dgelist, method = 'TMM'),silent=T)
+    design=stats::model.matrix(~group)
+    dge = edgeR::estimateDisp(dgelist_norm, design, robust = F) #dispersion not robust
+    fit = edgeR::glmFit(dge, design, robust = F)     #fit
+    lrt = edgeR::glmLRT(fit)   #test
+    x = ifelse(lrt$table$PValue < 0.05, 1, 0)
+    
+    y = as.numeric(grepl('_DS_', rownames(datarow), ignore.case=T))
+    au = pROC::auc(y, x)
+    return(au)
+}
+fnames = list.files()
+ls = lapply(fnames, readRDS)
+edge_res = lapply(ls, run.edgeR)
+
+names(edge_res) = fnames
+
+saveRDS(edge_res, "P:/scQuant/heatmap/edgeR_res.rds")
+####Running scDD#####
+
+run.scDD<-function(datarow){
+    
+    datarow = datarow
+    group = colnames(datarow)
+    
+    names(group)=colnames(datarow)
+    condition=group
+    idx=which(colSums(datarow)==0)
+    if(length(idx)!=0){
+        datarow=datarow[,-idx]
+        condition=condition[-idx]
+    }
+    sce=SingleCellExperiment::SingleCellExperiment(assays=list(
+        counts=datarow),colData=data.frame(condition))
+    
+    scDatEx.scran <- scDD::preprocess(sce, zero.thresh=1.0, scran_norm=TRUE)
+    
+    prior_param=list(alpha=0.01, mu0=0, s0=0.01, a0=0.01, b0=0.01)
+    scDatExSim <- scDD::scDD(scDatEx.scran, 
+                             prior_param=prior_param, 
+                             categorize = F,testZeroes=FALSE)
+    
+    res_scDD=scDD::results(scDatExSim)
+    x = ifelse(res_scDD$nonzero.pvalue.adj < 0.05, 1, 0)
+    
+    rname = rownames(sce)
+    rname = substr(rname, start = 1, stop = 2)
+    y = as.numeric(grepl('_DS_', rownames(datarow), ignore.case=T))
+    au = auc(y, x)
+    return(au)
+}
+
+fnames = list.files()
+ls = lapply(fnames, readRDS)
+
+scDD_res = lapply(ls, run.scDD)
+
+names(scDD_res) = fnames
+
+saveRDS(scDD_res, "P:/scQuant/heatmap/scDD_res.rds")
+
+####Running wilcoxson####
+run.wilcox_test<-function(datarow){
+    
+    group = colnames(datarow)
+    
+    idx2=which(group==unique(group)[2])
+    wilcoxtestfun<-function(x){
+        tx<-x[idx2]
+        ty<-x[-idx2]
+        result<-stats::wilcox.test(tx,ty)
+        return(result)
+    }
+    logdata=log1p(datarow)
+    results = apply(logdata, 1, wilcoxtestfun)
+    t2 = as.data.frame(
+        t(as.data.frame(lapply(results, function(x){x$p.value}))))
+    
+    t2$V2 = ifelse(t2$V1 < 0.05, 1, 0)
+    
+    y = as.numeric(grepl('_DS_', rownames(datarow), ignore.case=T))
+    au = auc(y, t2$V2)
+    return(au)
+}
+
+fnames = list.files()
+ls = lapply(fnames, readRDS)
+
+wil_res = lapply(ls, run.wilcox_test)
+
+newnames = sub(".rds","", fnames)
+names(wil_res) = newnames
+
+saveRDS(wil_res, "P:/scQuant/heatmap/will_res.rds")
